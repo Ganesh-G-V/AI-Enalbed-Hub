@@ -1,0 +1,653 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ApprovalStatus {
+  APPROVED
+  PENDING
+  RESTRICTED
+  DECLINED
+}
+
+enum DataClassification {
+  PUBLIC
+  INTERNAL
+  CONFIDENTIAL
+  RESTRICTED
+}
+
+enum TaskCategory {
+  CODING
+  DEBUGGING
+  TESTING
+  CODE_REVIEW
+  ARCHITECTURE
+  DATA_ANALYSIS
+  SQL
+  DOCUMENTATION
+  RESEARCH
+  SUMMARIZATION
+  KNOWLEDGE_RETRIEVAL
+  CUSTOMER_SUPPORT
+}
+
+enum FeedbackRating {
+  HELPFUL
+  NOT_HELPFUL
+}
+
+enum EvaluationStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum UsageDataType {
+  ACTUAL
+  ESTIMATED
+  SEEDED
+}
+
+enum UserRole {
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+model User {
+  id            String    @id @default(cuid()) @db.Text
+  email         String    @unique @db.Text
+  name          String?   @db.Text
+  role          UserRole  @default(MEMBER)
+  avatarUrl     String?   @db.Text
+  isDemoUser    Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  feedbacks     Feedback[]
+  evaluationRuns EvaluationRun[]
+  auditEvents   AuditEvent[]
+  promptFavorites PromptFavorite[]
+
+  @@index([email])
+  @@index([role])
+}
+
+model Tool {
+  id                String           @id @default(cuid()) @db.Text
+  name              String           @db.Text
+  provider          String           @db.Text
+  category          TaskCategory
+  capabilities      String[]
+  supportedTasks    String[]
+  approvalStatus    ApprovalStatus   @default(PENDING)
+  dataHandling      String           @db.Text   // guidance text
+  docsUrl           String?          @db.Text
+  sourceUrl         String?          @db.Text   // original source URL from ingestion
+  limitations       String?          @db.Text
+  recommendedUseCases String[]
+  lastReviewedAt    DateTime?        @db.Timestamptz()
+  verificationStatus String          @default("unverified") // verified, unverified, conflicting
+  lastVerifiedAt    DateTime?        @db.Timestamptz()
+  isCatalogueEntry  Boolean          @default(true)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  usageEvents       UsageEvent[]
+
+  @@index([category])
+  @@index([approvalStatus])
+  @@index([provider])
+  @@index([verificationStatus])
+}
+
+model ModelProfile {
+  id          String   @id @default(cuid()) @db.Text
+  name        String   @db.Text        // e.g. "claude-3-5-sonnet-20241022"
+  provider    String   @db.Text
+  displayName String   @db.Text
+  contextWindow Int?   @db.Integer
+  maxOutputTokens Int? @db.Integer
+  supportsCaching Boolean @default(false)
+  isApproved  Boolean  @default(false)
+  lifecycleStatus LifecycleStatus @default(ANNOUNCED)
+  releaseDate DateTime? @db.Timestamptz()
+  deprecationDate DateTime? @db.Timestamptz()
+  shutdownDate DateTime? @db.Timestamptz()
+  sourceUrl   String?  @db.Text
+  verificationStatus String @default("unverified") // verified, unverified, conflicting
+  lastVerifiedAt DateTime? @db.Timestamptz()
+  confidence    Float @default(0.0) // 0.0 to 1.0
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  pricings    ModelPricing[]
+  deprecations ModelDeprecation[]
+  benchmarks  BenchmarkResult[]
+
+  @@index([provider])
+  @@index([isApproved])
+  @@index([lifecycleStatus])
+  @@index([verificationStatus])
+}
+
+model ModelPricing {
+  id          String   @id @default(cuid()) @db.Text
+  modelId     String   @db.Text
+  version     Int      @default(1) @db.Integer
+  effectiveAt DateTime @db.Timestamptz()
+  inputRatePerMillion   Decimal @db.Decimal(12, 6)  // currency per 1M input tokens
+  outputRatePerMillion  Decimal @db.Decimal(12, 6)  // currency per 1M output tokens
+  cachedInputRatePerMillion Decimal? @db.Decimal(12, 6)
+  currency    String   @default("USD") @db.Text
+  source      String   @db.Text        // URL or document reference
+  assumptions String   @db.Text        // human-readable assumptions
+  isIllustrative Boolean @default(true) // true = illustrative/demo pricing
+  isCurrent   Boolean  @default(false)  // only one current per model
+  isVerified  Boolean  @default(false) // verified against authoritative source
+  verificationSource String? @db.Text // where verification came from
+  confidence   Float @default(0.0) // 0.0 to 1.0
+  createdAt   DateTime @default(now())
+
+  model       ModelProfile @relation(fields: [modelId], references: [id], onDelete: Cascade)
+
+  @@index([modelId])
+  @@index([isCurrent])
+  @@index([effectiveAt])
+  @@index([isVerified])
+  @@unique([modelId, version])
+}
+
+model PromptTemplate {
+  id          String   @id @default(cuid()) @db.Text
+  title       String   @db.Text
+  category    TaskCategory
+  description String   @db.Text
+  template    String   @db.Text        // full prompt template with {{variable}} placeholders
+  inputPlaceholders String[] // variable names
+  exampleInput  String?  @db.Text
+  exampleOutput String?  @db.Text
+  instructions  String?  @db.Text
+  expectedOutputFormat String? @db.Text
+  commonFailureModes String? @db.Text
+  qualityChecklist  String? @db.Text
+  applicableRole  String   @db.Text
+  difficulty      String   @db.Text   // beginner/intermediate/advanced
+  tags            String[]
+  isPublished     Boolean  @default(false)
+  isEditableByAdmin Boolean @default(true)
+  version         Int      @default(1) @db.Integer
+  lastReviewedAt  DateTime? @db.Timestamptz()
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  favorites   PromptFavorite[]
+
+  @@index([category])
+  @@index([isPublished])
+}
+
+model PromptFavorite {
+  id        String   @id @default(cuid()) @db.Text
+  userId    String   @db.Text
+  promptId  String   @db.Text
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  prompt    PromptTemplate @relation(fields: [promptId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, promptId])
+  @@index([userId])
+  @@index([promptId])
+}
+
+model KnowledgeDocument {
+  id          String   @id @default(cuid()) @db.Text
+  title       String   @db.Text
+  category    String   @db.Text
+  content     String   @db.Text        // full document text (searchable)
+  summary     String?  @db.Text
+  sourceUrl   String?  @db.Text
+  version     String   @db.Text        // e.g. "1.0"
+  reviewedAt  DateTime? @db.Timestamptz()
+  nextReviewAt DateTime? @db.Timestamptz()
+  isPublished Boolean  @default(false)
+  isSample    Boolean  @default(true)  // labeled as sample guidance
+  roleAccess  String[] @default([]) // roles allowed to view
+  tags        String[] @default([])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([category])
+  @@index([isPublished])
+  @@index([isSample])
+}
+
+model UsageEvent {
+  id          String   @id @default(cuid()) @db.Text
+  userId      String?  @db.Text        // pseudonymous id
+  toolId      String?  @db.Text
+  modelId     String?  @db.Text
+  category    TaskCategory?
+  dataClassification DataClassification?
+  inputTokens Int      @default(0) @db.Integer
+  outputTokens Int     @default(0) @db.Integer
+  cachedTokens Int      @default(0) @db.Integer
+  estimatedCost Decimal @default(0) @db.Decimal(12, 6)
+  actualCost  Decimal? @db.Decimal(12, 6)
+  currency    String   @default("USD") @db.Text
+  dataType    UsageDataType @default(SEEDED) // actual/estimated/seeded
+  latencyMs   Int?     @db.Integer
+  provider    String?  @db.Text
+  requestId   String?  @db.Text        // provider request id
+  success     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  tool        Tool?     @relation(fields: [toolId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([toolId])
+  @@index([category])
+  @@index([dataType])
+  @@index([createdAt])
+  @@index([success])
+}
+
+model Feedback {
+  id          String   @id @default(cuid()) @db.Text
+  userId      String   @db.Text
+  targetType  String   @db.Text        // prompt|knowledge|assistant|evaluation
+  targetId    String   @db.Text
+  rating      FeedbackRating
+  comment     String?  @db.Text
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([targetType, targetId])
+  @@index([userId])
+}
+
+model EvaluationScenario {
+  id          String   @id @default(cuid()) @db.Text
+  title       String   @db.Text
+  category    TaskCategory
+  description String   @db.Text
+  input       String   @db.Text
+  expectedOutcome String? @db.Text
+  rubric      String   @db.Text        // scoring rubric JSON/text
+  isAutomated Boolean  @default(false) // automated assertion vs human rating
+  isSample    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  runs        EvaluationRun[]
+
+  @@index([category])
+  @@index([isSample])
+}
+
+model EvaluationRun {
+  id          String   @id @default(cuid()) @db.Text
+  scenarioId  String   @db.Text
+  userId      String   @db.Text
+  modelId     String   @db.Text
+  promptId    String?  @db.Text
+  status      EvaluationStatus @default(PENDING)
+  output      String?  @db.Text
+  qualityScore Decimal? @db.Decimal(5, 2) // 0-100
+  passFail    Boolean? 
+  inputTokens Int      @default(0) @db.Integer
+  outputTokens Int     @default(0) @db.Integer
+  latencyMs   Int?     @db.Integer
+  estimatedCost Decimal @default(0) @db.Decimal(12, 6)
+  currency    String   @default("USD") @db.Text
+  dataType    UsageDataType @default(SEEDED)
+  notes       String?  @db.Text
+  createdAt   DateTime @default(now())
+
+  scenario    EvaluationScenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([scenarioId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model AuditEvent {
+  id          String   @id @default(cuid()) @db.Text
+  actorId     String?  @db.Text
+  action      String   @db.Text
+  targetType  String   @db.Text
+  targetId    String   @db.Text
+  metadata    Json?    @db.Json
+  createdAt   DateTime @default(now())
+
+  actor       User?     @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model AppSetting {
+  id          String   @id @default(cuid()) @db.Text
+  key         String   @unique @db.Text
+  value       String   @db.Text
+  description String?  @db.Text
+  updatedAt   DateTime @updatedAt
+
+  @@index([key])
+}
+
+enum SourceType {
+  PROVIDER_API
+  PRICING_PAGE
+  RELEASE_NOTES
+  DEPRECATION_NOTICE
+  RSS_FEED
+  ATOM_FEED
+  BENCHMARK_REPORT
+  RESEARCH_PUBLICATION
+  INTERNAL_REGISTRY
+}
+
+enum SourceReliability {
+  VERIFIED
+  REPUTABLE
+  UNVERIFIED
+}
+
+enum IngestionStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum ChangeType {
+  NEW_MODEL
+  NEW_VERSION
+  RELEASED
+  PREVIEW_TO_STABLE
+  CAPABILITY_ADDED
+  CAPABILITY_REMOVED
+  PRICING_CHANGE
+  CONTEXT_WINDOW_CHANGE
+  DEPRECATION
+  SHUTDOWN
+  API_CHANGE
+  PROVIDER_AVAILABILITY_CHANGE
+  CONFLICTING_CLAIM
+}
+
+enum ChangeReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CORRECTED
+  DEFERRED
+}
+
+enum LifecycleStatus {
+  ANNOUNCED
+  PREVIEW
+  GENERAL_AVAILABILITY
+  DEPRECATED
+  SHUTDOWN
+}
+
+model SourceRegistry {
+  id                String           @id @default(cuid()) @db.Text
+  name              String           @db.Text
+  provider          String           @db.Text
+  type              SourceType
+  url               String           @db.Text
+  config            Json?            @db.Json
+  authSecretRef     String?          @db.Text // reference to secret name, never the secret itself
+  enabled           Boolean          @default(true)
+  pollIntervalMs    Int              @default(3600000) // 1 hour
+  lastSuccessfulSync DateTime?      @db.Timestamptz()
+  lastAttemptedSync DateTime?       @db.Timestamptz()
+  nextScheduledSync DateTime?       @db.Timestamptz()
+  health              String         @default("unknown") // healthy, degraded, unhealthy
+  errorCount          Int              @default(0)
+  rateLimitRemaining  Int?            @db.Integer
+  retryCount          Int              @default(0)
+  reliability         SourceReliability @default(UNVERIFIED)
+  extractionMethod    String         @default("api") // api, rss, html, etc.
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  documents   SourceDocument[]
+  jobs        IngestionJob[]
+  changeEvents ChangeEvent[]
+
+  @@index([provider])
+  @@index([type])
+  @@index([enabled])
+  @@index([nextScheduledSync])
+}
+
+model SourceDocument {
+  id            String   @id @default(cuid()) @db.Text
+  sourceId      String   @db.Text
+  externalId    String?  @db.Text // source-specific identifier
+  title         String   @db.Text
+  url           String   @db.Text
+  content       String?  @db.Text // extracted/full text
+  contentHash   String?  @db.Text // for change detection
+  etag          String?  @db.Text
+  lastModified  DateTime? @db.Timestamptz()
+  publishedAt   DateTime? @db.Timestamptz()
+  retrievedAt   DateTime  @default(now())
+  metadata      Json?    @db.Json // source-specific fields
+  rawPayload    Json?    @db.Json // original response for audit
+
+  source        SourceRegistry @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  changeEvents  ChangeEvent[]
+
+  @@index([sourceId])
+  @@index([externalId])
+  @@index([retrievedAt])
+  @@index([contentHash])
+}
+
+model IngestionJob {
+  id          String   @id @default(cuid()) @db.Text
+  sourceId    String   @db.Text
+  name        String   @db.Text // e.g. "Anthropic model catalogue sync"
+  cron        String?  @db.Text // cron expression for scheduled runs
+  enabled     Boolean  @default(true)
+  timeoutMs   Int      @default(300000) // 5 minutes
+  maxRetries  Int      @default(3)
+  backoffBaseMs Int @default(1000) // exponential backoff base
+  lastRunId   String?  @db.Text
+  nextRunAt   DateTime? @db.Timestamptz()
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  source      SourceRegistry @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  runs        IngestionRun[]
+
+  @@index([sourceId])
+  @@index([enabled])
+  @@index([nextRunAt])
+}
+
+model IngestionRun {
+  id            String   @id @default(cuid()) @db.Text
+  jobId         String   @db.Text
+  status        IngestionStatus @default(PENDING)
+  startedAt     DateTime? @db.Timestamptz()
+  completedAt   DateTime? @db.Timestamptz()
+  durationMs    Int?     @db.Integer
+  itemsProcessed Int     @default(0) @db.Integer
+  itemsInserted  Int     @default(0) @db.Integer
+  itemsUpdated   Int     @default(0) @db.Integer
+  itemsSkipped   Int     @default(0) @db.Integer
+  errorMessage  String?  @db.Text
+  errorCode     String?  @db.Text
+  retryAttempt  Int      @default(0) @db.Integer
+  logs          Json?    @db.Json // structured log entries
+  etag          String?  @db.Text
+  contentHash   String?  @db.Text
+
+  job           IngestionJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@index([status])
+  @@index([startedAt])
+}
+
+model ChangeEvent {
+  id              String   @id @default(cuid()) @db.Text
+  sourceId        String   @db.Text
+  sourceDocumentId String? @db.Text
+  entityType      String   @db.Text // model, pricing, tool, capability, etc.
+  entityId        String   @db.Text // internal id or external id
+  changeType      ChangeType
+  oldValue        Json?    @db.Json
+  newValue        Json?    @db.Json
+  diff            String?  @db.Text // human-readable diff
+  sourceEvidence  String   @db.Text // URL or reference to source
+  sourcePublicationDate DateTime? @db.Timestamptz()
+  detectedAt      DateTime @default(now())
+  confidence      Float @default(0.0) // 0.0 to 1.0
+  impact          String   @default("medium") // low, medium, high, critical
+  reviewStatus    ChangeReviewStatus @default(PENDING)
+  reviewedBy      String?  @db.Text
+  reviewedAt      DateTime? @db.Timestamptz()
+  reviewNotes     String?  @db.Text
+  published       Boolean  @default(false) // whether change has been published to public views
+  previousVerifiedValue Json? @db.Json // last known verified value before this change
+
+  source        SourceRegistry @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  document      SourceDocument? @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+
+  @@index([sourceId])
+  @@index([entityType])
+  @@index([changeType])
+  @@index([reviewStatus])
+  @@index([detectedAt])
+  @@index([published])
+}
+
+model ModelDeprecation {
+  id              String   @id @default(cuid()) @db.Text
+  modelId         String   @db.Text
+  modelName       String   @db.Text // denormalized for display
+  provider        String   @db.Text
+  announcedAt     DateTime? @db.Timestamptz()
+  deprecationDate DateTime? @db.Timestamptz()
+  shutdownDate    DateTime? @db.Timestamptz()
+  reason          String?  @db.Text
+  migrationGuide  String?  @db.Text
+  replacementModel String? @db.Text // suggested replacement
+  sourceUrl       String?  @db.Text
+  isActive        Boolean  @default(true)
+
+  model           ModelProfile @relation(fields: [modelId], references: [id], onDelete: Cascade)
+
+  @@index([modelId])
+  @@index([provider])
+  @@index([isActive])
+}
+
+model BenchmarkResult {
+  id          String   @id @default(cuid()) @db.Text
+  modelId     String   @db.Text
+  modelName   String   @db.Text
+  provider    String   @db.Text
+  benchmarkName String  @db.Text
+  benchmarkVersion String? @db.Text
+  score       Float?
+  category    String   @db.Text // coding, reasoning, etc.
+  conditions  String?  @db.Text // evaluation conditions
+  date        DateTime? @db.Timestamptz()
+  sourceUrl   String?  @db.Text
+  isOfficial  Boolean  @default(false) // provider-published vs company-run
+  metadata    Json?    @db.Json
+
+  model       ModelProfile @relation(fields: [modelId], references: [id], onDelete: Cascade)
+
+  @@index([modelId])
+  @@index([benchmarkName])
+  @@index([date])
+}
+
+model RecommendationRule {
+  id          String   @id @default(cuid()) @db.Text
+  name        String   @db.Text
+  description String?  @db.Text
+  taskCategory String  @db.Text
+  dataClassification String @db.Text
+  weight      Float @default(1.0)
+  enabled     Boolean  @default(true)
+  conditions  Json?    @db.Json // filter conditions as JSON
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([taskCategory])
+  @@index([dataClassification])
+  @@index([enabled])
+}
+
+model RecommendationResult {
+  id          String   @id @default(cuid()) @db.Text
+  userId      String   @db.Text
+  taskCategory String  @db.Text
+  dataClassification String @db.Text
+  recommendedModelId String @db.Text
+  recommendedModelName String @db.Text
+  recommendedProvider String @db.Text
+  fitReason   String   @db.Text
+  alternatives Json?   @db.Json // array of alternative models with trade-offs
+  estimatedCost Decimal? @db.Decimal(12, 6)
+  costAssumptions String? @db.Text
+  approvalStatus String @db.Text
+  confidence    Float @default(0.0)
+  evidence      Json?    @db.Json // source citations, freshness
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([taskCategory])
+  @@index([createdAt])
+}
+
+model RecommendationFeedback {
+  id          String   @id @default(cuid()) @db.Text
+  recommendationId String @db.Text
+  userId      String   @db.Text
+  rating      String   @db.Text // helpful, not_helpful
+  comment     String?  @db.Text
+  createdAt   DateTime @default(now())
+
+  @@index([recommendationId])
+  @@index([userId])
+}
+
+model Notification {
+  id          String   @id @default(cuid()) @db.Text
+  userId      String   @db.Text
+  type        String   @db.Text // change_detected, pricing_changed, deprecation, sync_failed, review_pending
+  title       String   @db.Text
+  message     String   @db.Text
+  sourceUrl   String?  @db.Text
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+// Extend ModelProfile with lifecycle and verification fields
+// These are added via the existing model - see below
