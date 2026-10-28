@@ -44,7 +44,7 @@ function ToolsPageInner() {
   const capability = searchParams.get("capability") ?? "";
   const q = searchParams.get("q") ?? "";
 
-  const demo = document.documentElement.dataset.demoMode === "true";
+  // const demo = document.documentElement.dataset.demoMode === "true";
 
   const fetchData = React.useCallback(async () => {
     setLoading(true);

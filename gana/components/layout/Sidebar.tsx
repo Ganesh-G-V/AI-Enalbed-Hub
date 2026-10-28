@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, Cpu, FileText, Calculator, BookOpen, MessageCircle, FlaskConical, BarChart, Settings } from "lucide-react";
+import { LayoutDashboard, Cpu, FileText, Calculator, BookOpen, MessageCircle, FlaskConical, BarChart, Settings, Code2 } from "lucide-react";
 
 const NAV = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -11,6 +11,8 @@ const NAV = [
   { name: "Knowledge Center", href: "/knowledge", icon: BookOpen },
   { name: "Knowledge Assistant", href: "/assistant", icon: MessageCircle },
   { name: "Evaluation Lab", href: "/evaluations", icon: FlaskConical },
+  { name: "What's New", href: "/whats-new", icon: FlaskConical },
+  { name: "Agents & IDEs", href: "/agents", icon: Code2 },
   { name: "Analytics", href: "/analytics", icon: BarChart },
   { name: "Admin Settings", href: "/admin", icon: Settings },
 ];

@@ -25,7 +25,7 @@ export function TopHeader({
       <div className="flex items-center gap-2">
         <Button size="sm" variant="outline" className="hidden sm:flex items-center gap-2 text-xs">
           <Calendar size={14} className="mr-1" />
-          Oct 16, 2026
+          Oct 25, 2026
         </Button>
         <Button size="sm" variant="outline" className="flex items-center gap-2 text-xs">
           <Bell size={14} className="mr-1" />

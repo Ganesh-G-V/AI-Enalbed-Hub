@@ -2,11 +2,14 @@
 import { db } from "@/server/db/client";
 import { SourceConnector } from "./connector";
 import { OpenAIModelsConnector } from "./connectors/openai";
+import { OpenAIPricingConnector } from "./connectors/pricing";
+import { OpenAIWhatsNewConnector } from "./connectors/whatsnew";
 import { IngestionStatus, SourceType, SourceReliability, ChangeType, ChangeReviewStatus } from "@prisma/client";
 
 // Connector registry - add new connectors here
 const CONNECTORS: Record<string, () => SourceConnector> = {
-  "openai-models": () => new OpenAIModelsConnector(),
+  "PROVIDER_API": () => new OpenAIModelsConnector(),
+  "RSS_FEED": () => new OpenAIWhatsNewConnector(),
 };
 
 export function getConnector(sourceType: string): SourceConnector | null {

@@ -651,3 +651,41 @@ model Notification {
 
 // Extend ModelProfile with lifecycle and verification fields
 // These are added via the existing model - see below
+
+model AgentProduct {
+  id                String   @id @default(cuid()) @db.Text
+  name              String   @db.Text
+  provider          String   @db.Text
+  approvalStatus    ApprovalStatus @default(PENDING)
+  docsUrl           String?  @db.Text
+  sourceUrl         String?  @db.Text
+  verificationStatus String  @default("unverified")
+  lastVerifiedAt    DateTime? @db.Timestamptz()
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  capabilities      AgentCapability[]
+
+  @@index([provider])
+  @@index([approvalStatus])
+}
+
+model AgentCapability {
+  id                String   @id @default(cuid()) @db.Text
+  agentProductId    String   @db.Text
+  name              String   @db.Text
+  description       String   @db.Text
+  supportedTasks    String[]
+  multiFileEdit     Boolean  @default(false)
+  terminalAccess    Boolean  @default(false)
+  testExecution     Boolean  @default(false)
+  prWorkflow        Boolean  @default(false)
+  verificationStatus String  @default("unverified")
+  lastVerifiedAt    DateTime? @db.Timestamptz()
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  agentProduct      AgentProduct @relation(fields: [agentProductId], references: [id], onDelete: Cascade)
+
+  @@index([agentProductId])
+}

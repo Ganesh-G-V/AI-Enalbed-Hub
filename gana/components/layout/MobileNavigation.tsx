@@ -21,6 +21,8 @@ const NAV = [
   { name: "Knowledge Center", href: "/knowledge" },
   { name: "Knowledge Assistant", href: "/assistant" },
   { name: "Evaluation Lab", href: "/evaluations" },
+  { name: "What's New", href: "/whats-new" },
+  { name: "Agents & IDEs", href: "/agents" },
   { name: "Analytics", href: "/analytics" },
   { name: "Admin Settings", href: "/admin" },
 ];
